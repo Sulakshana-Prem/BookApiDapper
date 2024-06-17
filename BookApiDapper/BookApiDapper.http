@@ -1,0 +1,6 @@
+@BookApiDapper_HostAddress = http://localhost:5252
+
+GET {{BookApiDapper_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
