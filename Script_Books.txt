@@ -1,0 +1,195 @@
+TABLE CREATION ON BOOKSTABLE
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+GO
+
+/****** Object:  Table [dbo].[BooksTable]    Script Date: 17-06-2024 15:13:25 ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[BooksTable](
+	[Id] [int] NOT NULL,
+	[Publisher] [varchar](255) NOT NULL,
+	[Title] [varchar](255) NOT NULL,
+	[AuthorLastName] [varchar](100) NOT NULL,
+	[AuthorFirstName] [varchar](100) NOT NULL,
+	[Price] [decimal](18, 2) NOT NULL
+) ON [PRIMARY]
+GO
+
+
+
+TABLE CREATION ON HISTORY TABLE
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+GO
+
+/****** Object:  Table [dbo].[Book_HistoryTable]    Script Date: 17-06-2024 15:14:03 ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE TABLE [dbo].[Book_HistoryTable](
+	[Id] [int] IDENTITY(1,1) NOT NULL,
+	[Action] [varchar](255) NULL,
+	[Status] [nvarchar](50) NULL,
+	[CreatedTimeStamp] [datetime] NULL,
+	[UserId] [int] NULL,
+	[ErrorMessage] [varchar](max) NULL,
+PRIMARY KEY CLUSTERED 
+(
+	[Id] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]
+GO
+
+
+
+STORED PROCEDURE FOR GETBOOKSSORTEDBYAUTHORTITLE 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+GO
+
+/****** Object:  StoredProcedure [dbo].[GetBooksSortedByAuthorTitle]    Script Date: 17-06-2024 15:15:33 ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE PROCEDURE [dbo].[GetBooksSortedByAuthorTitle]
+AS
+BEGIN
+    SELECT * FROM BooksTable
+    ORDER BY AuthorLastName, AuthorFirstName, Title;
+END
+GO
+
+
+STORED PROCEDURE FOR GETBOOKSSORTEDBYPUBLISHERAUTHORTITLE 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+GO
+
+/****** Object:  StoredProcedure [dbo].[GetBooksSortedByPublisherAuthorTitle]    Script Date: 17-06-2024 15:15:59 ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE PROCEDURE [dbo].[GetBooksSortedByPublisherAuthorTitle]
+AS
+BEGIN
+    SELECT * FROM BooksTable
+   order by Publisher, AuthorLastName,AuthorFirstName,Title
+END
+GO
+
+
+STORED PROCEDURE FOR GETTOTALPRICE 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+GO
+
+/****** Object:  StoredProcedure [dbo].[GetTotalPrice]    Script Date: 17-06-2024 15:18:47 ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE PROCEDURE [dbo].[GetTotalPrice]
+AS
+BEGIN
+    SELECT SUM(Price) AS TotalPrice FROM BooksTable;
+END
+GO
+
+
+STORED PROCEDURE FOR BULKINSERTWITHHISTORY 
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+GO
+
+/****** Object:  StoredProcedure [dbo].[usp_BulkInsertWithHistory]    Script Date: 17-06-2024 15:19:06 ******/
+SET ANSI_NULLS ON
+GO
+
+SET QUOTED_IDENTIFIER ON
+GO
+
+CREATE PROCEDURE [dbo].[usp_BulkInsertWithHistory]
+    @BulkData dbo.BooksTable READONLY,
+	@UserId int
+AS
+BEGIN
+    SET NOCOUNT ON;
+    DECLARE @ErrorMessage NVARCHAR(MAX);
+
+    -- Start transaction
+    BEGIN TRY
+        BEGIN TRANSACTION;
+
+        -- Insert into HistoryTable
+        INSERT INTO Book_HistoryTable (Action, Status, CreatedTimeStamp, UserId)
+        VALUES ('Bulk Insert Started', 'Started', GETDATE(), @UserId);
+
+        -- Savepoint after history table insert
+        SAVE TRANSACTION SavePoint_HistoryInsert;
+
+        -- Bulk insert into BooksTable
+        INSERT INTO BooksTable (Id,Publisher, Title, AuthorLastName, AuthorFirstName, Price)
+        SELECT b.Id,b.Publisher, b.Title, b.AuthorLastName, b.AuthorFirstName, b.Price
+        FROM @BulkData b
+        LEFT JOIN BooksTable m ON b.Id = m.Id
+        WHERE m.Id IS NULL;
+
+        -- Insert into HistoryTable to log successful insert
+        INSERT INTO Book_HistoryTable (Action,Status, CreatedTimeStamp, UserId)
+        VALUES ('Bulk Insert Completed', 'Success', GETDATE(), @UserId);
+
+        -- Commit transaction if everything is successful
+        COMMIT TRANSACTION;
+
+        -- Return success message
+        SELECT 'Bulk insert into BooksTable and history table logs created' AS Message;
+    END TRY
+    BEGIN CATCH
+        -- Rollback to savepoint if there is an error after the history insert
+        IF @@TRANCOUNT > 0
+        BEGIN
+            ROLLBACK TRANSACTION SavePoint_HistoryInsert;
+        END
+
+        -- Capture the error message
+        SET @ErrorMessage = ERROR_MESSAGE();
+
+        -- Insert error message into HistoryTable
+        INSERT INTO Book_HistoryTable (Action, Status, CreatedTimeStamp,UserId, ErrorMessage)
+        VALUES ('Bulk Insert Failed', 'Failed', GETDATE(),@UserId, @ErrorMessage);
+
+        -- Rollback the entire transaction
+        IF @@TRANCOUNT > 0
+        BEGIN
+            ROLLBACK TRANSACTION;
+        END
+
+        -- Return error message
+        SELECT 'Error occurred: ' + @ErrorMessage AS Message;
+    END CATCH
+END
+GO
+
+
+
+
+
+
+

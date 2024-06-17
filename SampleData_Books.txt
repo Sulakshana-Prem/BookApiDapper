@@ -1,0 +1,11 @@
+Title = "Pride and Prejudice",
+AuthorFirstName = "Jane",
+AuthorLastName = "Austen",
+Publisher = "Penguin Classics",
+Price = 80.00
+
+Title = "The Great Gatsby",
+AuthorFirstName = "F. Scott",
+AuthorLastName = "Fitzgerald",
+Publisher = "Scribner",
+Price = 90.00
